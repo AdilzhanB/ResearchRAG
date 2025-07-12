@@ -1,0 +1,177 @@
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
+import os
+from dotenv import load_dotenv
+import logging
+from contextlib import asynccontextmanager
+
+# Load environment variables
+load_dotenv()
+
+# Import routers
+from app.routers import search, analysis, citations, drafting, calendar, metadata
+from app.core.config import settings
+from app.core.security import verify_token
+from app.services.vector_service import VectorService
+from app.services.gemini_service import GeminiService
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(settings.LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+# Global services
+vector_service = None
+gemini_service = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    global vector_service, gemini_service
+    
+    # Startup
+    logger.info("Starting Legal Research API...")
+    
+    try:
+        # Initialize services
+        vector_service = VectorService()
+        gemini_service = GeminiService()
+        
+        # Initialize vector database
+        await vector_service.initialize()
+        
+        logger.info("Services initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Legal Research API...")
+    
+    if vector_service:
+        await vector_service.close()
+
+# Create FastAPI app
+app = FastAPI(
+    title="Legal Research Assistant API",
+    description="Advanced legal research and analysis powered by AI",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Security
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify JWT token and return user info"""
+    try:
+        token = credentials.credentials
+        payload = verify_token(token)
+        return payload
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": settings.ENVIRONMENT
+    }
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint with API information"""
+    return {
+        "message": "Legal Research Assistant API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+# Include routers
+app.include_router(
+    search.router,
+    prefix="/api/search",
+    tags=["search"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+app.include_router(
+    analysis.router,
+    prefix="/api/analysis",
+    tags=["analysis"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+app.include_router(
+    citations.router,
+    prefix="/api/citations",
+    tags=["citations"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+app.include_router(
+    drafting.router,
+    prefix="/api/drafting",
+    tags=["drafting"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+app.include_router(
+    calendar.router,
+    prefix="/api/calendar",
+    tags=["calendar"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+app.include_router(
+    metadata.router,
+    prefix="/api/metadata",
+    tags=["metadata"]
+)
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Global exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host=settings.API_HOST,
+        port=settings.API_PORT,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower()
+    )
