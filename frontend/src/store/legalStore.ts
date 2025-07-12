@@ -12,6 +12,29 @@ export interface LegalDocument {
   similarity_score?: number;
 }
 
+export interface UploadedDocument {
+  document_id: number;
+  filename: string;
+  file_path: string;
+  file_size: number;
+  file_type: string;
+}
+
+export interface RAGQueryResponse {
+  query: string;
+  answer: string;
+  source_documents: any[];
+  chat_history: any[];
+  tools_used: string[];
+  error?: string;
+}
+
+export interface AgentTool {
+  name: string;
+  description: string;
+  parameters: Record<string, string>;
+}
+
 export interface SearchResult {
   documents: LegalDocument[];
   query: string;
@@ -41,14 +64,30 @@ interface LegalResearchState {
   recentDocuments: LegalDocument[];
   bookmarkedDocuments: LegalDocument[];
   
+  // Document upload state
+  uploadedDocuments: UploadedDocument[];
+  isUploading: boolean;
+  uploadProgress: number;
+  
+  // RAG state
+  ragQuery: string;
+  ragResponse: RAGQueryResponse | null;
+  ragHistory: RAGQueryResponse[];
+  isQuerying: boolean;
+  useConversation: boolean;
+  useAgent: boolean;
+  
+  // Agent tools state
+  availableTools: AgentTool[];
+  selectedTool: string | null;
+  
   // Analysis state
   currentAnalysis: CaseAnalysis | null;
   isAnalyzing: boolean;
   
   // UI state
   sidebarOpen: boolean;
-  activeTab: 'search' | 'analysis' | 'drafting' | 'calendar';
-  
+  activeTab: 'search' | 'analysis' | 'drafting' | 'calendar' | 'rag' | 'upload';
   // Actions
   setSearchQuery: (query: string) => void;
   setSearchResults: (results: SearchResult) => void;
@@ -58,10 +97,30 @@ interface LegalResearchState {
   setSelectedDocument: (document: LegalDocument | null) => void;
   addRecentDocument: (document: LegalDocument) => void;
   toggleBookmark: (document: LegalDocument) => void;
+  
+  // Document upload actions
+  setUploadedDocuments: (documents: UploadedDocument[]) => void;
+  addUploadedDocument: (document: UploadedDocument) => void;
+  setIsUploading: (uploading: boolean) => void;
+  setUploadProgress: (progress: number) => void;
+  
+  // RAG actions
+  setRagQuery: (query: string) => void;
+  setRagResponse: (response: RAGQueryResponse) => void;
+  addToRagHistory: (response: RAGQueryResponse) => void;
+  setIsQuerying: (querying: boolean) => void;
+  setUseConversation: (use: boolean) => void;
+  setUseAgent: (use: boolean) => void;
+  clearRagHistory: () => void;
+  
+  // Agent tools actions
+  setAvailableTools: (tools: AgentTool[]) => void;
+  setSelectedTool: (tool: string | null) => void;
+  
   setCurrentAnalysis: (analysis: CaseAnalysis | null) => void;
   setIsAnalyzing: (analyzing: boolean) => void;
   setSidebarOpen: (open: boolean) => void;
-  setActiveTab: (tab: 'search' | 'analysis' | 'drafting' | 'calendar') => void;
+  setActiveTab: (tab: 'search' | 'analysis' | 'drafting' | 'calendar' | 'rag' | 'upload') => void;
 }
 
 export const useLegalResearchStore = create<LegalResearchState>()(
@@ -76,6 +135,24 @@ export const useLegalResearchStore = create<LegalResearchState>()(
       selectedDocument: null,
       recentDocuments: [],
       bookmarkedDocuments: [],
+      
+      // Document upload state
+      uploadedDocuments: [],
+      isUploading: false,
+      uploadProgress: 0,
+      
+      // RAG state
+      ragQuery: '',
+      ragResponse: null,
+      ragHistory: [],
+      isQuerying: false,
+      useConversation: false,
+      useAgent: false,
+      
+      // Agent tools state
+      availableTools: [],
+      selectedTool: null,
+      
       currentAnalysis: null,
       isAnalyzing: false,
       sidebarOpen: true,
@@ -123,6 +200,41 @@ export const useLegalResearchStore = create<LegalResearchState>()(
           });
         }
       },
+      
+      // Document upload actions
+      setUploadedDocuments: (documents) => set({ uploadedDocuments: documents }),
+      
+      addUploadedDocument: (document) => {
+        const { uploadedDocuments } = get();
+        set({ uploadedDocuments: [...uploadedDocuments, document] });
+      },
+      
+      setIsUploading: (uploading) => set({ isUploading: uploading }),
+      
+      setUploadProgress: (progress) => set({ uploadProgress: progress }),
+      
+      // RAG actions
+      setRagQuery: (query) => set({ ragQuery: query }),
+      
+      setRagResponse: (response) => set({ ragResponse: response }),
+      
+      addToRagHistory: (response) => {
+        const { ragHistory } = get();
+        set({ ragHistory: [...ragHistory, response] });
+      },
+      
+      setIsQuerying: (querying) => set({ isQuerying: querying }),
+      
+      setUseConversation: (use) => set({ useConversation: use }),
+      
+      setUseAgent: (use) => set({ useAgent: use }),
+      
+      clearRagHistory: () => set({ ragHistory: [] }),
+      
+      // Agent tools actions
+      setAvailableTools: (tools) => set({ availableTools: tools }),
+      
+      setSelectedTool: (tool) => set({ selectedTool: tool }),
       
       setCurrentAnalysis: (analysis) => set({ currentAnalysis: analysis }),
       

@@ -28,6 +28,8 @@ import {
   Settings as SettingsIcon,
   AccountCircle,
   Notifications,
+  CloudUpload as UploadIcon,
+  Psychology as RAGIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLegalResearchStore } from '../store/legalStore';
@@ -58,6 +60,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const menuItems = [
     { id: 'search', label: 'Search & Research', icon: <SearchIcon />, color: '#1976d2' },
+    { id: 'upload', label: 'Document Upload', icon: <UploadIcon />, color: '#7c4dff' },
+    { id: 'rag', label: 'RAG Assistant', icon: <RAGIcon />, color: '#00acc1' },
     { id: 'analysis', label: 'Case Analysis', icon: <AnalyticsIcon />, color: '#388e3c' },
     { id: 'drafting', label: 'Document Drafting', icon: <EditIcon />, color: '#f57c00' },
     { id: 'calendar', label: 'Calendar & Deadlines', icon: <CalendarIcon />, color: '#d32f2f' },

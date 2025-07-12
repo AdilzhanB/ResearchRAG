@@ -3,6 +3,8 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import Layout from './components/Layout';
 import SearchView from './components/SearchView';
+import DocumentUpload from './components/DocumentUpload';
+import RAGInterface from './components/RAGInterface';
 import { useLegalResearchStore } from './store/legalStore';
 
 const theme = createTheme({
@@ -63,6 +65,10 @@ function App() {
     switch (activeTab) {
       case 'search':
         return <SearchView />;
+      case 'upload':
+        return <DocumentUpload />;
+      case 'rag':
+        return <RAGInterface />;
       case 'analysis':
         return (
           <div className="p-8 text-center">

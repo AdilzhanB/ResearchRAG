@@ -61,6 +61,30 @@ export interface DocumentDraftParams {
   supporting_cases?: string[];
 }
 
+export interface RAGQueryParams {
+  query: string;
+  use_conversation?: boolean;
+  use_agent?: boolean;
+}
+
+export interface AgentToolParams {
+  tool_name: string;
+  query: string;
+  parameters?: Record<string, any>;
+}
+
+export interface DocumentUploadResponse {
+  message: string;
+  documents: Array<{
+    document_id: number;
+    filename: string;
+    file_path: string;
+    file_size: number;
+    file_type: string;
+  }>;
+  total_uploaded: number;
+}
+
 class LegalApiService {
   // Search and retrieval
   async searchDocuments(params: SearchParams): Promise<SearchResult> {
@@ -253,6 +277,148 @@ class LegalApiService {
       throw error;
     }
   }
+
+  // Document Upload and RAG
+  async uploadDocuments(files: FileList): Promise<DocumentUploadResponse> {
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await api.post('/api/documents/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            // This could be used to update upload progress in the store
+            console.log('Upload progress:', percentCompleted);
+          }
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading documents:', error);
+      throw error;
+    }
+  }
+
+  async queryRAG(params: RAGQueryParams): Promise<any> {
+    try {
+      const response = await api.post('/api/documents/query', params);
+      return response.data;
+    } catch (error) {
+      console.error('Error querying RAG:', error);
+      throw error;
+    }
+  }
+
+  async searchSimilarDocuments(query: string, limit: number = 5): Promise<any> {
+    try {
+      const response = await api.get(`/api/documents/search/${encodeURIComponent(query)}?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error searching similar documents:', error);
+      throw error;
+    }
+  }
+
+  async getRAGStats(): Promise<any> {
+    try {
+      const response = await api.get('/api/documents/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting RAG stats:', error);
+      throw error;
+    }
+  }
+
+  async clearRAGMemory(): Promise<any> {
+    try {
+      const response = await api.post('/api/documents/clear-memory');
+      return response.data;
+    } catch (error) {
+      console.error('Error clearing RAG memory:', error);
+      throw error;
+    }
+  }
+
+  async getUploadedDocuments(limit: number = 50, offset: number = 0): Promise<any> {
+    try {
+      const response = await api.get(`/api/documents/documents?limit=${limit}&offset=${offset}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting uploaded documents:', error);
+      throw error;
+    }
+  }
+
+  async deleteDocument(documentId: number): Promise<any> {
+    try {
+      const response = await api.delete(`/api/documents/documents/${documentId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      throw error;
+    }
+  }
+
+  // Agent Tools
+  async getAvailableTools(): Promise<any> {
+    try {
+      const response = await api.get('/api/agents/tools');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting available tools:', error);
+      throw error;
+    }
+  }
+
+  async executeAgentTool(params: AgentToolParams): Promise<any> {
+    try {
+      const response = await api.post('/api/agents/execute', params);
+      return response.data;
+    } catch (error) {
+      console.error('Error executing agent tool:', error);
+      throw error;
+    }
+  }
+
+  async executeResearchWorkflow(
+    query: string,
+    options: {
+      include_cases?: boolean;
+      include_statutes?: boolean;
+      include_wikipedia?: boolean;
+      jurisdiction?: string;
+    } = {}
+  ): Promise<any> {
+    try {
+      const response = await api.post('/api/agents/research-workflow', {
+        query,
+        ...options,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error executing research workflow:', error);
+      throw error;
+    }
+  }
+
+  async getWorkflowTemplates(): Promise<any> {
+    try {
+      const response = await api.get('/api/agents/workflow-templates');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting workflow templates:', error);
+      throw error;
+    }
+  }
 }
 
 export const legalApiService = new LegalApiService();
+export const legalApi = new LegalApiService();
+export default legalApiService;
