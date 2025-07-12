@@ -13,17 +13,17 @@ class Settings(BaseSettings):
     API_VERSION: str = "v1"
     
     # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/legaldb"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./legal_research.db"
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # Google Gemini
     GOOGLE_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-pro"
     
-    # Vector Database
-    PINECONE_API_KEY: str = ""
-    PINECONE_ENVIRONMENT: str = ""
-    PINECONE_INDEX_NAME: str = "legal-documents"
+    # Vector Database (FAISS)
+    VECTOR_DB_PATH: str = "./vector_db"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    VECTOR_DIMENSION: int = 384
     
     # JWT
     SECRET_KEY: str = "your_super_secret_key_here"

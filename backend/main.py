@@ -14,8 +14,9 @@ load_dotenv()
 from app.routers import search, analysis, citations, drafting, calendar, metadata
 from app.core.config import settings
 from app.core.security import verify_token
-from app.services.vector_service import VectorService
-from app.services.gemini_service import GeminiService
+from app.core.database import init_db, close_db
+from app.services.vector_service import vector_service
+from app.services.gemini_service import gemini_service
 
 # Configure logging
 logging.basicConfig(
@@ -29,22 +30,19 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Global services
-vector_service = None
-gemini_service = None
+# Global services are imported as instances
+# vector_service and gemini_service are already initialized
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global vector_service, gemini_service
     
     # Startup
     logger.info("Starting Legal Research API...")
     
     try:
-        # Initialize services
-        vector_service = VectorService()
-        gemini_service = GeminiService()
+        # Initialize database
+        await init_db()
         
         # Initialize vector database
         await vector_service.initialize()
@@ -60,8 +58,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Legal Research API...")
     
-    if vector_service:
-        await vector_service.close()
+    await vector_service.close()
+    await close_db()
 
 # Create FastAPI app
 app = FastAPI(

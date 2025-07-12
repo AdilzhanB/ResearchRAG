@@ -1,5 +1,4 @@
 import axios from 'axios';
-import AxiosRequestConfig from 'axios';
 import type { LegalDocument, SearchResult, CaseAnalysis } from '../store/legalStore';
 
 const API_BASE_URL = (import.meta.env as any).VITE_API_URL || 'http://localhost:8000';
