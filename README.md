@@ -1,8 +1,6 @@
 <div align="center">
 
 # 🏛️ Intelligent Legal Research Assistant
-
-<img src="https://img.shields.io/badge/AI-Powered-blue?style=for-the-badge&logo=openai" alt="AI Powered">
 <img src="https://img.shields.io/badge/RAG-Enabled-green?style=for-the-badge&logo=databricks" alt="RAG Enabled">
 <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi" alt="FastAPI">
 <img src="https://img.shields.io/badge/React-Frontend-61DAFB?style=for-the-badge&logo=react" alt="React">
