@@ -10,7 +10,7 @@ from app.models.schemas import (
     StandardResponse
 )
 from app.models.database import DocumentTemplate as DBDocumentTemplate
-from app.services.gemini_service import gemini_service
+from app.services.gemini_service import GeminiService
 from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ async def generate_document(request: DocumentDraftRequest):
             "custom_instructions": request.custom_instructions
         }
         
-        result = await gemini_service.generate_document(
+        result = await GeminiService.generate_document(
             request.template_type, 
             parameters
         )

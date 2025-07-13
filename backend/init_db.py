@@ -3,7 +3,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal, init_db
 from app.models.database import LegalDocument, DocumentTemplate, User
-from app.services.vector_service import vector_service
+from app.services.vector_service import VectorService
 from app.core.security import get_password_hash
 import logging
 
@@ -242,7 +242,7 @@ async def populate_documents():
                 
                 # Add to vector database
                 try:
-                    vector_id = await vector_service.add_document(
+                    vector_id = await VectorService.add_document(
                         document_id=doc_data["id"],
                         content=doc_data["content"],
                         metadata={

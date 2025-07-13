@@ -15,8 +15,8 @@ from app.routers import search, analysis, citations, drafting, calendar, metadat
 from app.core.config import settings
 from app.core.security import verify_token
 from app.core.database import init_db, close_db
-from app.services.vector_service import vector_service
-from app.services.gemini_service import gemini_service
+from app.services.vector_service import VectorService
+from app.services.gemini_service import GeminiService
 from app.services.rag_pipeline import rag_pipeline
 
 # Configure logging
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
         await init_db()
         
         # Initialize vector database
-        await vector_service.initialize()
+        await VectorService.initialize()
         
         # Initialize RAG pipeline
         if settings.GOOGLE_API_KEY:
@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Legal Research API...")
     
-    await vector_service.close()
+    await VectorService.close()
     await close_db()
 
 # Create FastAPI app

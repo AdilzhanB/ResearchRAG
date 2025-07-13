@@ -8,7 +8,7 @@ from app.models.schemas import (
     CitationValidationResponse,
     StandardResponse
 )
-from app.services.gemini_service import gemini_service
+from app.services.gemini_service import GeminiService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,7 +21,7 @@ async def format_citations(request: CitationFormatRequest):
     try:
         logger.info(f"Formatting citation in {request.citation_style} style")
         
-        result = await gemini_service.format_citation(
+        result = await GeminiService.format_citation(
             request.text, 
             request.citation_style.value
         )

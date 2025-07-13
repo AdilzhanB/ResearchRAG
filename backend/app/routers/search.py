@@ -10,8 +10,8 @@ from app.models.schemas import (
     StandardResponse
 )
 from app.models.database import LegalDocument as DBLegalDocument, SearchHistory, User
-from app.services.vector_service import vector_service
-from app.services.gemini_service import gemini_service
+from app.services.vector_service import VectorService
+from app.services.gemini_service import GeminiService
 from app.core.database import get_db
 import json
 
@@ -33,7 +33,7 @@ async def search_documents(
         logger.info(f"Searching documents with query: {request.query}")
         
         # Enhance search query using AI
-        enhanced_query = await gemini_service.generate_search_query(
+        enhanced_query = await GeminiService.generate_search_query(
             request.query, 
             context="legal document search"
         )
@@ -41,7 +41,7 @@ async def search_documents(
         logger.info(f"Enhanced query: {enhanced_query}")
         
         # Search using vector similarity
-        vector_results = await vector_service.search_similar(
+        vector_results = await VectorService.search_similar(
             enhanced_query, 
             k=min(request.limit * 2, 100),  # Get more results for filtering
             threshold=0.3

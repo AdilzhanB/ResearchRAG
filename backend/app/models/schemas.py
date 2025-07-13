@@ -36,7 +36,7 @@ class LegalDocument(BaseModel):
     date: str
     citations: List[str] = []
     similarity_score: Optional[float] = None
-    metadata: Dict[str, Any] = {}
+    document_metadata: Dict[str, Any] = {}
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
@@ -76,7 +76,7 @@ class ConflictResult(BaseModel):
     doc2: str
     conflict_type: str
     description: str
-    severity: str = Field(..., regex="^(low|medium|high)$")
+    severity: str = Field(..., pattern="^(low|medium|high)$")
 
 class ConflictCheckResponse(BaseModel):
     conflicts: List[ConflictResult]
@@ -103,7 +103,7 @@ class CitationValidationResponse(BaseModel):
     citations: List[CitationValidationResult]
 
 class DocumentDraftRequest(BaseModel):
-    template_type: str = Field(..., regex="^(brief|motion|contract|memo)$")
+    template_type: str = Field(..., pattern="^(brief|motion|contract|memo)$")
     case_info: Optional[Dict[str, str]] = None
     key_arguments: List[str] = []
     supporting_cases: List[str] = []
@@ -127,7 +127,7 @@ class DeadlineRequest(BaseModel):
     deadline_type: str
     date: str
     description: str
-    priority: str = Field(..., regex="^(low|medium|high)$")
+    priority: str = Field(..., pattern="^(low|medium|high)$")
 
 class Deadline(BaseModel):
     id: str
@@ -135,8 +135,8 @@ class Deadline(BaseModel):
     deadline_type: str
     date: str
     description: str
-    status: str = Field(..., regex="^(pending|completed|overdue)$")
-    priority: str = Field(..., regex="^(low|medium|high)$")
+    status: str = Field(..., pattern="^(pending|completed|overdue)$")
+    priority: str = Field(..., pattern="^(low|medium|high)$")
     created_at: datetime
     updated_at: Optional[datetime] = None
 

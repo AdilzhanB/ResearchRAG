@@ -1,13 +1,14 @@
+# LangChain imports for RAG pipeline
 from langchain.chains import RetrievalQA, ConversationalRetrievalChain
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
-from langchain.schema import Document
-from langchain.llms.base import LLM
-from langchain.callbacks.manager import CallbackManagerForLLMRun
-from langchain.tools import Tool, WikipediaQueryRun
-from langchain.utilities import WikipediaAPIWrapper
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
+from langchain_core.documents import Document
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.tools import Tool
+from langchain_community.tools import WikipediaQueryRun
+from langchain_community.utilities import WikipediaAPIWrapper
 from langchain.agents import initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
 import google.generativeai as genai
@@ -16,52 +17,64 @@ import logging
 import os
 import tempfile
 from pathlib import Path
+import asyncio
+from datetime import datetime
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-class GeminiLLM(LLM):
-    """Custom LangChain LLM wrapper for Google Gemini"""
+class GeminiLLM:
+    """Wrapper for Google Gemini using ChatGoogleGenerativeAI"""
     
-    def __init__(self, model_name: str = "gemini-pro", api_key: str = None):
-        super().__init__()
-        if api_key:
-            genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name)
-    
-    @property
-    def _llm_type(self) -> str:
-        return "gemini"
-    
-    def _call(
-        self,
-        prompt: str,
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> str:
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            logger.error(f"Error calling Gemini: {e}")
-            return f"Error: {str(e)}"
+    def __init__(self, model_name: str = "gemini-pro", api_key: str = None, **kwargs):
+        self.model_name = model_name
+        self.google_api_key = api_key or settings.GOOGLE_API_KEY
+        self._llm = None
+        
+    def get_llm(self):
+        """Get the LangChain LLM instance"""
+        if self._llm is None:
+            try:
+                self._llm = ChatGoogleGenerativeAI(
+                    model=self.model_name,
+                    google_api_key=self.google_api_key,
+                    temperature=0.1
+                )
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini LLM: {e}")
+                raise
+        return self._llm
 
 class LegalRAGPipeline:
     """Advanced Legal RAG Pipeline with LangChain"""
     
     def __init__(self, google_api_key: str = None):
-        from app.core.config import settings
         api_key = google_api_key or settings.GOOGLE_API_KEY
         
         if api_key:
-            self.llm = GeminiLLM(api_key=api_key)
+            # Use ChatGoogleGenerativeAI directly
+            try:
+                self.llm = ChatGoogleGenerativeAI(
+                    model="gemini-pro",
+                    google_api_key=api_key,
+                    temperature=0.1
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize ChatGoogleGenerativeAI: {e}, falling back to custom wrapper")
+                self.llm = GeminiLLM(api_key=api_key).get_llm()
         else:
             logger.warning("No Google API key provided, RAG pipeline will have limited functionality")
             self.llm = None
             
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
+        # Initialize embeddings
+        try:
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize embeddings: {e}")
+            self.embeddings = None
+            
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,

@@ -34,7 +34,7 @@ class LegalDocument(Base):
     jurisdiction = Column(String(100), nullable=False, index=True)
     date_published = Column(String(20), nullable=False)
     citations = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    document_metadata = Column(JSON, default=dict)
     file_path = Column(String(500))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
