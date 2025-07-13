@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     
     # File Storage
     UPLOAD_DIR: str = "./uploads"
+    UPLOAD_DIRECTORY: str = "./uploads"
     MAX_FILE_SIZE: str = "50MB"
+    
+    # Vector Store
+    VECTORSTORE_PATH: str = "./vectorstore"
     
     # Logging
     LOG_LEVEL: str = "INFO"

@@ -1,0 +1,8 @@
+# Namespace for the legal research application
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: legal-research
+  labels:
+    name: legal-research
+    app: legal-research-assistant

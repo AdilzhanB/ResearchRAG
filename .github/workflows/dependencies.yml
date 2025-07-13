@@ -1,0 +1,107 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-backend-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install pip-tools
+      run: pip install pip-tools
+
+    - name: Update Python dependencies
+      working-directory: ./backend
+      run: |
+        pip-compile --upgrade requirements.in
+        pip-compile --upgrade requirements-dev.in
+
+    - name: Create pull request for backend
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore(backend): update Python dependencies"
+        title: "Update Backend Dependencies"
+        body: |
+          This PR updates Python dependencies to their latest versions.
+          
+          Please review the changes and ensure all tests pass before merging.
+        branch: update-backend-deps
+        delete-branch: true
+        base: develop
+        add-paths: |
+          backend/requirements.txt
+          backend/requirements-dev.txt
+
+  update-frontend-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Update npm dependencies
+      working-directory: ./frontend
+      run: |
+        npm update
+        npm audit fix --audit-level moderate
+
+    - name: Create pull request for frontend
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore(frontend): update npm dependencies"
+        title: "Update Frontend Dependencies"
+        body: |
+          This PR updates npm dependencies to their latest versions.
+          
+          Please review the changes and ensure all tests pass before merging.
+        branch: update-frontend-deps
+        delete-branch: true
+        base: develop
+        add-paths: |
+          frontend/package.json
+          frontend/package-lock.json
+
+  security-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Python security audit
+      working-directory: ./backend
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json || true
+
+    - name: Node.js security audit
+      working-directory: ./frontend
+      run: |
+        npm audit --audit-level moderate --json > npm-audit.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          backend/safety-report.json
+          frontend/npm-audit.json

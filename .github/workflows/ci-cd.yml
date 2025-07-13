@@ -1,0 +1,341 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run linting
+      working-directory: ./backend
+      run: |
+        pip install black flake8 isort mypy
+        black --check app/
+        isort --check-only app/
+        flake8 app/
+        mypy app/
+
+    - name: Run tests
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        SECRET_KEY: test-secret-key-for-ci
+      run: |
+        pytest --cov=app --cov-report=xml --cov-report=term-missing
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./backend/coverage.xml
+        flags: backend
+        name: backend-coverage
+
+  test-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: './frontend/package-lock.json'
+
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Run linting
+      working-directory: ./frontend
+      run: |
+        npm run lint
+        npm run type-check
+
+    - name: Run tests
+      working-directory: ./frontend
+      run: npm run test:coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./frontend/coverage/lcov.info
+        flags: frontend
+        name: frontend-coverage
+
+    - name: Build application
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Run E2E tests
+      working-directory: ./frontend
+      run: |
+        npm run build
+        npm run preview &
+        npx wait-on http://localhost:4173
+        npm run test:e2e
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Snyk security scan
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+
+  build-and-push:
+    needs: [test-backend, test-frontend, security-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    
+    environment:
+      name: staging
+      url: https://staging.legal-research.your-domain.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_STAGING }}
+
+    - name: Deploy to staging
+      run: |
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/config.yaml
+        kubectl apply -f k8s/postgres.yaml
+        kubectl apply -f k8s/redis.yaml
+        kubectl apply -f k8s/backend.yaml
+        kubectl apply -f k8s/frontend.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+        # Wait for deployment to complete
+        kubectl rollout status deployment/legal-research-backend -n legal-research --timeout=300s
+        kubectl rollout status deployment/legal-research-frontend -n legal-research --timeout=300s
+
+    - name: Run smoke tests
+      run: |
+        # Wait for services to be ready
+        sleep 60
+        
+        # Test backend health
+        kubectl exec -n legal-research deployment/legal-research-backend -- curl -f http://localhost:8000/health
+        
+        # Test frontend
+        kubectl exec -n legal-research deployment/legal-research-frontend -- curl -f http://localhost:80/
+
+  deploy-production:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    environment:
+      name: production
+      url: https://legal-research.your-domain.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+
+    - name: Deploy to production
+      run: |
+        # Update image tags to use SHA
+        export IMAGE_TAG=${{ github.sha }}
+        
+        # Apply configurations
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/config.yaml
+        kubectl apply -f k8s/postgres.yaml
+        kubectl apply -f k8s/redis.yaml
+        
+        # Update deployment images
+        kubectl set image deployment/legal-research-backend backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -n legal-research
+        kubectl set image deployment/legal-research-frontend frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -n legal-research
+        
+        kubectl apply -f k8s/backend.yaml
+        kubectl apply -f k8s/frontend.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+        # Wait for deployment to complete
+        kubectl rollout status deployment/legal-research-backend -n legal-research --timeout=600s
+        kubectl rollout status deployment/legal-research-frontend -n legal-research --timeout=600s
+
+    - name: Run production health checks
+      run: |
+        # Wait for services to stabilize
+        sleep 120
+        
+        # Comprehensive health checks
+        kubectl exec -n legal-research deployment/legal-research-backend -- curl -f http://localhost:8000/health
+        kubectl exec -n legal-research deployment/legal-research-backend -- curl -f http://localhost:8000/api/metadata/system-info
+        
+        # Test frontend
+        kubectl exec -n legal-research deployment/legal-research-frontend -- curl -f http://localhost:80/
+
+    - name: Send deployment notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      if: always()
+
+  cleanup:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [test-backend, test-frontend, security-scan, build-and-push, deploy-staging, deploy-production]
+    
+    steps:
+    - name: Clean up Docker images
+      run: |
+        docker system prune -af --volumes || true

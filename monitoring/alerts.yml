@@ -1,0 +1,161 @@
+# Prometheus Alert Rules
+groups:
+  - name: legal-research-alerts
+    rules:
+      # Backend API alerts
+      - alert: BackendDown
+        expr: up{job="legal-research-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Legal Research Backend is down"
+          description: "Backend API has been down for more than 1 minute"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, http_request_duration_seconds_bucket{job="legal-research-backend"}) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time on backend API"
+          description: "95th percentile response time is {{ $value }}s"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="legal-research-backend",status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on backend API"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      - alert: HighCPUUsage
+        expr: (100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}%"
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}% on {{ $labels.device }}"
+
+      # Database alerts
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL too many connections"
+          description: "PostgreSQL has {{ $value | humanizePercentage }} connections"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been down for more than 1 minute"
+
+      # Application-specific alerts
+      - alert: RAGPipelineErrors
+        expr: increase(rag_pipeline_errors_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of RAG pipeline errors"
+          description: "RAG pipeline has {{ $value }} errors in the last 5 minutes"
+
+      - alert: DocumentUploadFailures
+        expr: increase(document_upload_failures_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Document upload failures"
+          description: "{{ $value }} document uploads failed in the last 5 minutes"
+
+      - alert: VectorStoreIndexingLag
+        expr: vector_store_indexing_lag_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Vector store indexing lag"
+          description: "Vector store indexing is lagging by {{ $value }}s"
+
+      # Kubernetes alerts
+      - alert: PodCrashLooping
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping"
+
+      - alert: NodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kubernetes node not ready"
+          description: "Node {{ $labels.node }} is not ready"
+
+      - alert: DeploymentReplicasMismatch
+        expr: kube_deployment_status_replicas != kube_deployment_spec_replicas
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deployment replicas mismatch"
+          description: "Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has mismatched replicas"
+
+      # Security alerts
+      - alert: UnauthorizedAPIAccess
+        expr: increase(http_requests_total{status="401"}[5m]) > 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of unauthorized API requests"
+          description: "{{ $value }} unauthorized requests in the last 5 minutes"
+
+      - alert: SuspiciousFileUploads
+        expr: increase(suspicious_file_uploads_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Suspicious file uploads detected"
+          description: "{{ $value }} suspicious file uploads detected"

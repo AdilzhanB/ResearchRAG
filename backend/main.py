@@ -11,12 +11,13 @@ from contextlib import asynccontextmanager
 load_dotenv()
 
 # Import routers
-from app.routers import search, analysis, citations, drafting, calendar, metadata
+from app.routers import search, analysis, citations, drafting, calendar, metadata, documents, agents
 from app.core.config import settings
 from app.core.security import verify_token
 from app.core.database import init_db, close_db
 from app.services.vector_service import vector_service
 from app.services.gemini_service import gemini_service
+from app.services.rag_pipeline import rag_pipeline
 
 # Configure logging
 logging.basicConfig(
@@ -46,6 +47,18 @@ async def lifespan(app: FastAPI):
         
         # Initialize vector database
         await vector_service.initialize()
+        
+        # Initialize RAG pipeline
+        if settings.GOOGLE_API_KEY:
+            # Try to load existing vectorstore
+            try:
+                rag_pipeline.load_vectorstore(settings.VECTORSTORE_PATH)
+                logger.info("Loaded existing RAG vectorstore")
+            except Exception as e:
+                logger.warning(f"Could not load existing vectorstore: {e}")
+                logger.info("RAG pipeline will be initialized when documents are uploaded")
+        else:
+            logger.warning("GOOGLE_API_KEY not set, RAG pipeline will have limited functionality")
         
         logger.info("Services initialized successfully")
         
@@ -153,6 +166,20 @@ app.include_router(
     metadata.router,
     prefix="/api/metadata",
     tags=["metadata"]
+)
+
+app.include_router(
+    documents.router,
+    prefix="/api/documents",
+    tags=["documents"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+app.include_router(
+    agents.router,
+    prefix="/api/agents",
+    tags=["agents"],
+    dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
 )
 
 # Global exception handler

@@ -151,6 +151,45 @@ class DocumentTypeInfo(BaseModel):
     name: str
     description: str
 
+# Document Upload and RAG Models
+class DocumentResponse(BaseModel):
+    id: int
+    title: str
+    document_type: str
+    file_path: str
+    upload_date: str
+    file_size: int
+    user_id: int
+
+class DocumentUploadResponse(BaseModel):
+    message: str
+    documents: List[Dict[str, Any]]
+    total_uploaded: int
+
+class RAGQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=1000)
+    use_conversation: bool = False
+    use_agent: bool = False
+
+class RAGQueryResponse(BaseModel):
+    query: str
+    answer: str
+    source_documents: List[Dict[str, Any]] = []
+    chat_history: List[Dict[str, Any]] = []
+    tools_used: List[str] = []
+    error: Optional[str] = None
+
+class AgentToolRequest(BaseModel):
+    tool_name: str
+    query: str
+    parameters: Optional[Dict[str, Any]] = {}
+
+class AgentToolResponse(BaseModel):
+    tool_name: str
+    result: str
+    success: bool
+    error: Optional[str] = None
+
 # Response Models
 class StandardResponse(BaseModel):
     success: bool = True
