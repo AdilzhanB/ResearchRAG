@@ -11,13 +11,16 @@ from contextlib import asynccontextmanager
 load_dotenv()
 
 # Import routers
-from app.routers import search, analysis, citations, drafting, calendar, metadata, documents, agents
+from app.routers import search, analysis, citations, drafting, calendar, metadata, documents, agents, auth
 from app.core.config import settings
 from app.core.security import verify_token
 from app.core.database import init_db, close_db
-from app.services.vector_service import VectorService
+from app.services.vector_service import vector_service
 from app.services.gemini_service import GeminiService
 from app.services.rag_pipeline import rag_pipeline
+
+# Initialize services
+gemini_service = GeminiService()
 
 # Configure logging
 logging.basicConfig(
@@ -46,7 +49,7 @@ async def lifespan(app: FastAPI):
         await init_db()
         
         # Initialize vector database
-        await VectorService.initialize()
+        await vector_service.initialize()
         
         # Initialize RAG pipeline
         if settings.GOOGLE_API_KEY:
@@ -71,7 +74,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Legal Research API...")
     
-    await VectorService.close()
+    await vector_service.close()
     await close_db()
 
 # Create FastAPI app
@@ -180,6 +183,13 @@ app.include_router(
     prefix="/api/agents",
     tags=["agents"],
     dependencies=[Depends(get_current_user)] if settings.ENVIRONMENT == "production" else []
+)
+
+# Authentication router (no auth dependency)
+app.include_router(
+    auth.router,
+    prefix="/api",
+    tags=["authentication"]
 )
 
 # Global exception handler
